@@ -61,7 +61,7 @@ run: install
 	@open $(INSTALLED_APP)
 
 team:
-	@security find-identity -v -p codesigning | sed -n 's/.*Apple Development: \([^(]*\)(\([A-Z0-9]*\)).*/team=\2  identity=\1/p' || true
+	@security find-identity -v -p codesigning | sed -n 's/^ *[0-9]*) \([0-9A-F]*\) "Apple Development: \([^(]*\)(\([A-Z0-9]*\))".*/hash=\1\nlabel=\2\nteam=\3/p' || true
 
 doctor:
 	@echo "=== 证书 ==="

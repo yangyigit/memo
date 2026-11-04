@@ -40,7 +40,7 @@ struct MonthWidgetView: View {
 }
 
 struct MonthWidget: Widget {
-    let kind = "MemoMonthWidget"
+    let kind = WidgetKinds.month
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MemoProvider()) { entry in

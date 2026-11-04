@@ -44,20 +44,26 @@ public enum StoreFile {
     public static func loadResult(from url: URL = AppInfo.storeURL) -> LoadResult {
         let decoder = decoder()
 
-        if let bytes = try? Data(contentsOf: url) {
-            if let data = try? decoder.decode(StoreData.self, from: bytes) {
-                return LoadResult(data: data)
-            }
-            // 主文件损坏：留档
-            try? FileManager.default.moveItem(at: url, to: quarantineURL(for: url))
-            if let backupBytes = try? Data(contentsOf: backupURL(for: url)),
-               let backup = try? decoder.decode(StoreData.self, from: backupBytes) {
-                return LoadResult(data: backup, problem: "数据文件损坏，已从备份恢复")
-            }
-            return LoadResult(data: StoreData(), problem: "数据文件损坏且无可用备份，已重建空库（原文件已留档）")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            return LoadResult(data: StoreData())
         }
 
-        return LoadResult(data: StoreData())
+        guard let bytes = try? Data(contentsOf: url) else {
+            // 文件在但读不动：多半是沙盒/权限问题，需要给用户提示而不是沉默地显示空月历
+            return LoadResult(data: StoreData(), problem: "读不到数据文件（权限受限）")
+        }
+
+        if let data = try? decoder.decode(StoreData.self, from: bytes) {
+            return LoadResult(data: data)
+        }
+
+        // 主文件损坏：留档
+        try? FileManager.default.moveItem(at: url, to: quarantineURL(for: url))
+        if let backupBytes = try? Data(contentsOf: backupURL(for: url)),
+           let backup = try? decoder.decode(StoreData.self, from: backupBytes) {
+            return LoadResult(data: backup, problem: "数据文件损坏，已从备份恢复")
+        }
+        return LoadResult(data: StoreData(), problem: "数据文件损坏且无可用备份，已重建空库（原文件已留档）")
     }
 
     public static func load(from url: URL = AppInfo.storeURL) -> StoreData {
@@ -101,9 +107,16 @@ public enum StoreFile {
         return true
     }
 
-    public static func notifyWidgets() {
+    /// 只刷新指定的组件比 reloadAllTimelines 快一些（组件内勾选时能少几十到几百毫秒）
+    public static func notifyWidgets(kinds: [String] = []) {
         #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadAllTimelines()
+        if kinds.isEmpty {
+            WidgetCenter.shared.reloadAllTimelines()
+        } else {
+            for kind in kinds {
+                WidgetCenter.shared.reloadTimelines(ofKind: kind)
+            }
+        }
         #endif
     }
 }

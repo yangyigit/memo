@@ -24,6 +24,7 @@ struct ToggleTaskIntent: AppIntent {
         if let uuid = UUID(uuidString: taskID) {
             StoreFile.toggleTask(dayKey: dayKey, taskID: uuid)
         }
+        StoreFile.notifyWidgets(kinds: [WidgetKinds.month, WidgetKinds.today])
         return .result()
     }
 }

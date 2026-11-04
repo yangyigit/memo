@@ -14,10 +14,20 @@ macOS 上的一个本地小工具：桌面常驻一张「日历本」卡片，�
 
 ## 安装
 
+**前提：Xcode 里登录一个 Apple ID（免费账号即可，不需要 99 美元的开发者计划）。**
+没有它 App 也能跑，但 macOS 不会加载小组件（原因见下方「为什么组件要特殊签名」）。
+
+1. Xcode → Settings…（⌘,）→ Accounts → `+` → Apple ID
+2. 选中账号 → Manage Certificates… → `+` → **Apple Development** → Done
+3. 回到项目目录：
+
 ```bash
 brew install xcodegen   # 只需一次
-make run                # 生成工程 → 编译 → 安装到 ~/Applications → 启动
+make team               # 确认能查到 Apple Development 证书
+make run                # 生成工程 → 编译 → 签名 → 安装到 ~/Applications → 启动
 ```
+
+> 免费个人证书 **7 天过期**。组件停止刷新时重新 `make run` 即可续签，数据不受影响。
 
 首次运行后，桌面右键 →「编辑小组件」→ 搜索 **Memo**，可以添加两种组件：
 
@@ -73,13 +83,23 @@ make clean
 
 ### 为什么组件要特殊签名
 
-macOS 只把**带 `com.apple.security.app-sandbox` entitlement** 的扩展收录进插件库（`pkd`），否则它不会出现在小组件列表里。而本项目完全不签名（ad-hoc）、也不申请开发者账号，所以 `make install` 会：
+这条链路上有两道独立的关卡（都已在实现中验证）：
 
-1. 用 ad-hoc 身份签 widget 扩展，并附上 `app-sandbox` + `temporary-exception.files.absolute-path.read-write`（放行共享数据目录）
-2. 再签外层 App
-3. `lsregister` + `pluginkit -a` 注册
+1. **`pkd`（插件库）** 只收录带 `com.apple.security.app-sandbox` entitlement 的扩展。
+   没有这个 entitlement，`pluginkit -m` 里根本查不到，组件也不会出现在列表。
+2. **`chronod`（真正渲染组件的进程）** 只接受**证书链受系统信任**的签名。
+   ad-hoc 和自签名证书都会被静默拒绝（日志：`Requested to add extension, but purging instead
+   because we shouldn't cache it`）。换成 Apple ID 签发的 Apple Development 证书后立刻正常。
 
-因为组件在沙盒里，`NSHomeDirectory()` 会被重定向到容器目录，所以共享路径统一由 `AppInfo.realHomeDirectory`（`getpwuid`）解析。
+所以本项目：
+
+- widget 的 entitlements 由 `build/MemoWidget.entitlements` 提供（`app-sandbox` +
+  `temporary-exception.files.absolute-path.read-write` 放行共享数据目录），交给 Xcode 签名；
+- App 本身不沙盒，两边共享 `~/Library/Application Support/Memo/`；
+- 因为 widget 在沙盒里 `NSHomeDirectory()` 会被重定向到容器目录，共享路径统一由
+  `AppInfo.realHomeDirectory`（`getpwuid`）解析；
+- `scripts/build.sh` 自动探测本机 Apple Development 证书：有就用它签名，没有就退回 ad-hoc
+  并明确提示「组件不会被系统加载」。
 
 ### 代码结构
 
@@ -99,7 +119,9 @@ Tests/           CalendarMath / StoreFile / Store 单元测试
 
 ## 已知限制
 
-- 不签名、不公证：只能本机使用，首次打开可能需要在「系统设置 → 隐私与安全性」里放行。
+- 组件内勾选计划到画面刷新有约 1 秒系统延迟（WidgetKit 不能乐观更新，必须走
+  intent → 落盘 → chronod 重渲染）。
+- 不公证：只能本机使用，首次打开可能需要在「系统设置 → 隐私与安全性」里放行。
 - 只看自己的 Mac：没有 iCloud 同步、没有 iPhone 版。
 - 没有农历、法定节假日与调休；大小周完全按「交替规则 + 单周覆盖」推算。
 - 组件内容不能直接打字（WidgetKit 限制），只能勾选；写文字要点开 App。

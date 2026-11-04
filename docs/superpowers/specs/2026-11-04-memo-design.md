@@ -41,10 +41,15 @@
   - `Memo`（`com.hengji.memo`）— SwiftUI App
   - `MemoWidget`（`com.hengji.memo.widget`）— `com.apple.widgetkit-extension` extension，嵌入 `Memo.app/Contents/PlugIns/`
 - `Shared/` 目录下的源码同时编译进两个 target（不建 framework，省去签名与嵌入复杂度）。
-- **不签名 / ad-hoc 签名**：
-  - `CODE_SIGN_IDENTITY = "-"`，`CODE_SIGNING_REQUIRED = YES`（ad-hoc），无 Team
-  - 两个 target 均 `ENABLE_APP_SANDBOX = NO`（关闭沙盒）
-  - 不使用 App Group，App 与 Widget 通过同一个磁盘路径读写数据
+- **签名策略（实现阶段修正，见 §3.3）**：
+  - Widget 扩展必须带 `com.apple.security.app-sandbox` entitlement，否则 `pkd` 不收录
+  - Widget 还必须由**系统信任的证书链**签名（免费 Apple ID 的 Apple Development 证书即可），
+    ad-hoc 与自签名会被 `chronod` 拒绝（"we shouldn't cache it"）
+  - App 本身不沙盒（`ENABLE_APP_SANDBOX = NO`）；沙盒只在 widget 的 entitlements 文件里声明
+  - 不使用 App Group。widget 用 `temporary-exception.files.absolute-path.read-write`
+    放行 `~/Library/Application Support/Memo/`，与 App 共享同一份数据
+  - `scripts/build.sh` 探测本机 Apple Development 证书：有则用它签名，没有则退回 ad-hoc
+    并明确提示「组件不会被系统加载」
 - `Makefile` 目标：
   - `make gen` — xcodegen 生成工程
   - `make build` — `xcodebuild -scheme Memo -configuration Debug build`
@@ -55,16 +60,20 @@
 
 ### 3.3 风险与退路
 
-**风险**：ad-hoc 签名的本地 App，其 widget extension 可能无法被系统注册（不出现在「编辑小组件」列表）。
+**实际结论（实现阶段验证）**：这条链路有两道各自独立的关卡，都已定位并解决：
 
-**验证方式**：里程碑 ① 只做「空壳 App + 一个静态 widget」，先跑通 `make install` → 组件出现在列表 → 添加成功，再写业务代码。
+1. **`pkd`（插件库）**：只收录带 `com.apple.security.app-sandbox` entitlement 的扩展。
+   缺它时 `pluginkit -m` 里查不到、组件不出现在列表。加上后 ad-hoc 签名即可被收录。
+2. **`chronod`（组件渲染进程）**：只接受证书链受系统信任的签名。ad-hoc 与自签名证书
+   （即使加了 app-sandbox / app-group / temporary-exception）都会被拒绝，日志为
+   `Requested to add extension, but purging instead because we shouldn't cache it`。
+   换成免费 Apple ID 的 Apple Development 证书后组件正常显示。
 
-**退路**（按顺序尝试）：
+**用户决策**：接受「用免费 Apple ID 签一次名」（不加入开发者计划）。代价是证书 7 天过期，
+过期后重新 `make run` 续签即可，数据不受影响。
 
-1. `pluginkit -a ~/Applications/Memo.app/Contents/PlugIns/MemoWidget.appex` 强制注册
-2. App 拷到 `/Applications`（部分系统版本对 `~/Applications` 注册较弱）
-3. 清理 `~/Library/Developer/Xcode/DerivedData` 与 `killall -KILL pkd`，重启 Dock
-4. 若仍不可用：改用 Xcode GUI 打开工程、选 "Sign to Run Locally" 手动 Run 一次完成注册；再不可用则回报用户，降级为「MenuBarExtra 常驻卡片」方案（用户决策）
+**已知残留**：组件内勾选计划到画面刷新约有 1 秒系统延迟（WidgetKit 无法乐观更新，
+必须走 intent → 落盘 → chronod 重渲染）。已用 `reloadTimelines(ofKind:)` 定点刷新减少耗时。
 
 ## 4. 数据层
 

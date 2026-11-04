@@ -10,17 +10,17 @@ DERIVED="build/DerivedData"
 LOG="build/xcodebuild.log"
 mkdir -p build
 
-TEAM_ID="${TEAM_ID:-$(security find-identity -v -p codesigning 2>/dev/null \
-  | sed -n 's/.*Apple Development[^(]*(\([A-Z0-9]*\)).*/\1/p' | head -1)}"
+# 取第一个 Apple Development 证书的 SHA-1 身份（比名字更稳，不受重名/邮箱变化影响）
+IDENTITY_HASH="${CODE_SIGN_HASH:-$(security find-identity -v -p codesigning 2>/dev/null \
+  | sed -n 's/^ *[0-9]*) \([0-9A-F]\{40\}\).*Apple Development.*/\1/p' | head -1)}"
 
 COMMON=(-project Memo.xcodeproj -scheme Memo -configuration "$CONFIG" -derivedDataPath "$DERIVED")
 
-if [ -n "$TEAM_ID" ]; then
-  echo "🔏 签名模式：Apple Development（team $TEAM_ID）"
-  SIGN=(-allowProvisioningUpdates
-        DEVELOPMENT_TEAM="$TEAM_ID"
-        CODE_SIGN_STYLE=Automatic
-        CODE_SIGN_IDENTITY="Apple Development")
+if [ -n "$IDENTITY_HASH" ]; then
+  echo "🔏 签名模式：Apple Development（${IDENTITY_HASH:0:10}…）"
+  SIGN=(CODE_SIGN_STYLE=Manual
+        CODE_SIGN_IDENTITY="$IDENTITY_HASH"
+        CODE_SIGNING_REQUIRED=YES)
 else
   echo "⚠️  ad-hoc 模式：未找到 Apple Development 证书 —— App 能跑，但系统不会加载小组件"
   echo "    需要小组件时：Xcode → Settings → Accounts 登录 Apple ID，然后重新 make run"
@@ -28,7 +28,7 @@ else
 fi
 
 set -o pipefail
-xcodebuild "${COMMON[@]}" "${SIGN[@]}" build 2>&1 | tee "$LOG" | grep -E "error:|warning: .*entitlement|^BUILD|^\*\*" || true
+xcodebuild "${COMMON[@]}" "${SIGN[@]}" build 2>&1 | tee "$LOG" | grep -E "error:|^BUILD|^\*\*" || true
 
 if grep -q "^\*\* BUILD SUCCEEDED" "$LOG"; then
   echo "✅ build ok ($CONFIG)"

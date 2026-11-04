@@ -104,7 +104,7 @@ struct TodayWidgetView: View {
 }
 
 struct TodayWidget: Widget {
-    let kind = "MemoTodayWidget"
+    let kind = WidgetKinds.today
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MemoProvider()) { entry in
