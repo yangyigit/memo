@@ -12,7 +12,7 @@ macOS 原生（SwiftUI + WidgetKit），为**大小周**而做：这周上 6 天
 | 🪶 **简单** | 只有「月 / 周 / 设置」三个页面和两个组件，没有项目、标签、优先级、看板 |
 | ⚡ **易用** | 打开就是当月；总结自动保存；计划回车即加、点一下勾掉，桌面上也能勾 |
 
-![month](docs/shots/month.png)
+![month](docs/shots/month.jpg)
 
 ## 环境要求
 
