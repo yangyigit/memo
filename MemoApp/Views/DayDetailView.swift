@@ -7,6 +7,9 @@ struct DayDetailView: View {
     @State private var current: Date
     @State private var newTask = ""
     @State private var today = Date()
+    @State private var summaryDraft = ""
+    @State private var loadedKey = ""
+    @State private var commitTask: Task<Void, Never>?
     @FocusState private var addFieldFocused: Bool
 
     init(date: Date) {
@@ -17,11 +20,36 @@ struct DayDetailView: View {
     private var snapshot: DaySnapshot { store.daySnapshot(for: current, today: today) }
     private var tasks: [PlanTask] { store.dayEntry(key)?.tasks ?? [] }
 
-    private var summaryBinding: Binding<String> {
-        Binding(
-            get: { store.dayEntry(key)?.summary ?? "" },
-            set: { text in store.updateDay(key) { $0.summary = text } }
-        )
+    // MARK: - 总结草稿（打字不直接写库，防抖后再提交）
+
+    private func loadDraft() {
+        guard loadedKey != key else { return }
+        flush(commitTo: loadedKey)
+        summaryDraft = store.dayEntry(key)?.summary ?? ""
+        loadedKey = key
+    }
+
+    /// 把草稿写回指定日期（默认当前日期）；内容没变就什么都不做
+    private func flush(commitTo targetKey: String? = nil) {
+        commitTask?.cancel()
+        commitTask = nil
+        let dayKey = targetKey ?? key
+        guard !dayKey.isEmpty, dayKey == loadedKey || targetKey == nil else { return }
+        let draft = summaryDraft
+        guard (store.dayEntry(dayKey)?.summary ?? "") != draft else { return }
+        store.updateDay(dayKey) { $0.summary = draft }
+    }
+
+    private func scheduleCommit() {
+        commitTask?.cancel()
+        let draft = summaryDraft
+        let dayKey = key
+        commitTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            guard (store.dayEntry(dayKey)?.summary ?? "") != draft else { return }
+            store.updateDay(dayKey) { $0.summary = draft }
+        }
     }
 
     var body: some View {
@@ -34,8 +62,16 @@ struct DayDetailView: View {
         }
         .frame(width: 660, height: 660)
         .background(Theme.paper)
-        .onAppear { today = Date() }
-        .onDisappear { store.saveNow() }
+        .onAppear {
+            today = Date()
+            loadDraft()
+        }
+        .onChange(of: key) { _, _ in loadDraft() }
+        .onChange(of: summaryDraft) { _, _ in scheduleCommit() }
+        .onDisappear {
+            flush()
+            store.saveNow()
+        }
     }
 
     // MARK: - 头部
@@ -107,15 +143,15 @@ struct DayDetailView: View {
             HStack {
                 SectionLabel("总结")
                 Spacer()
-                Text("\(summaryBinding.wrappedValue.count) 字")
+                Text("\(summaryDraft.count) 字")
                     .font(Theme.sans(10))
                     .foregroundStyle(Theme.inkSecondary.opacity(0.8))
             }
 
-            PlainTextEditor(text: summaryBinding)
+            PlainTextEditor(text: $summaryDraft, identity: key)
                 .frame(height: 200)
                 .overlay(alignment: .topLeading) {
-                    if summaryBinding.wrappedValue.isEmpty {
+                    if summaryDraft.isEmpty {
                         Text("今天过得怎么样？")
                             .font(Theme.sans(14))
                             .foregroundStyle(Theme.inkSecondary.opacity(0.55))
@@ -279,10 +315,12 @@ struct DayDetailView: View {
     }
 
     private func shift(_ days: Int) {
+        flush()
         current = CalendarMath.calendar.startOfDay(for: CalendarMath.addDays(days, to: current))
     }
 
     private func close() {
+        flush()
         store.saveNow()
         dismiss()
     }

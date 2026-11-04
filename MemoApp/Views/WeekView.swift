@@ -7,15 +7,42 @@ struct WeekView: View {
     @Binding var selectedDay: IdentifiableDate?
     var today: Date
 
+    @State private var summaryDraft = ""
+    @State private var loadedWeekKey = ""
+    @State private var commitTask: Task<Void, Never>?
+
     private var snapshot: WeekSnapshot {
         store.weekSnapshot(containing: weekAnchor, today: today)
     }
 
-    private func summaryBinding(for weekKey: String) -> Binding<String> {
-        Binding(
-            get: { store.weekEntry(weekKey)?.summary ?? "" },
-            set: { store.setWeekSummary(weekKey: weekKey, text: $0) }
-        )
+    // MARK: - 周总结草稿（打字不直接写库，防抖后再提交）
+
+    private func loadDraft(_ weekKey: String) {
+        guard loadedWeekKey != weekKey else { return }
+        flush(commitTo: loadedWeekKey)
+        summaryDraft = store.weekEntry(weekKey)?.summary ?? ""
+        loadedWeekKey = weekKey
+    }
+
+    private func flush(commitTo targetKey: String? = nil) {
+        commitTask?.cancel()
+        commitTask = nil
+        let key = targetKey ?? loadedWeekKey
+        guard !key.isEmpty else { return }
+        let draft = summaryDraft
+        guard (store.weekEntry(key)?.summary ?? "") != draft else { return }
+        store.setWeekSummary(weekKey: key, text: draft)
+    }
+
+    private func scheduleCommit(_ weekKey: String) {
+        commitTask?.cancel()
+        let draft = summaryDraft
+        commitTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            guard (store.weekEntry(weekKey)?.summary ?? "") != draft else { return }
+            store.setWeekSummary(weekKey: weekKey, text: draft)
+        }
     }
 
     /// 只针对「基准天数」，不要用 snap.workdays（那是含单日例外的实际天数）
@@ -44,6 +71,10 @@ struct WeekView: View {
             .padding(Theme.pagePadding)
         }
         .scrollIndicators(.hidden)
+        .onAppear { loadDraft(snap.weekKey) }
+        .onChange(of: snap.weekKey) { _, newKey in loadDraft(newKey) }
+        .onChange(of: summaryDraft) { _, _ in scheduleCommit(snap.weekKey) }
+        .onDisappear { flush() }
     }
 
     // MARK: - 头部
@@ -61,9 +92,18 @@ struct WeekView: View {
 
             Spacer()
 
-            iconButton("chevron.left") { weekAnchor = CalendarMath.addWeeks(-1, to: weekAnchor) }
-            iconButton("chevron.right") { weekAnchor = CalendarMath.addWeeks(1, to: weekAnchor) }
-            textButton("本周") { weekAnchor = today }
+            iconButton("chevron.left") {
+                flush()
+                weekAnchor = CalendarMath.addWeeks(-1, to: weekAnchor)
+            }
+            iconButton("chevron.right") {
+                flush()
+                weekAnchor = CalendarMath.addWeeks(1, to: weekAnchor)
+            }
+            textButton("本周") {
+                flush()
+                weekAnchor = today
+            }
         }
     }
 
@@ -199,15 +239,15 @@ struct WeekView: View {
                 HStack {
                     SectionLabel("本周总结")
                     Spacer()
-                    Text("\(summaryBinding(for: snap.weekKey).wrappedValue.count) 字")
+                    Text("\(summaryDraft.count) 字")
                         .font(Theme.sans(10))
                         .foregroundStyle(Theme.inkSecondary.opacity(0.8))
                 }
 
-                PlainTextEditor(text: summaryBinding(for: snap.weekKey))
+                PlainTextEditor(text: $summaryDraft, identity: snap.weekKey)
                     .frame(height: 170)
                     .overlay(alignment: .topLeading) {
-                        if summaryBinding(for: snap.weekKey).wrappedValue.isEmpty {
+                        if summaryDraft.isEmpty {
                             Text("这一周的关键词、做完的事、没做好的地方……")
                                 .font(Theme.sans(14))
                                 .foregroundStyle(Theme.inkSecondary.opacity(0.55))

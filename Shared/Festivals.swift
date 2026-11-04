@@ -69,10 +69,36 @@ public enum Festivals {
         return (month, day, comps.isLeapMonth ?? false)
     }
 
+    // MARK: - 缓存（农历换算要跑 Calendar(.chinese)，按日缓存，避免每帧重算）
+
+    private static let lock = NSLock()
+    private static var cache: [String: Festival] = [:]
+    private static var misses: Set<String> = []
+
     // MARK: - 查询
 
     /// 某天的节日（可能没有）
     public static func festival(on date: Date) -> Festival? {
+        let dayKey = CalendarMath.dateKey(date)
+
+        lock.lock()
+        if let hit = cache[dayKey] { lock.unlock(); return hit }
+        if misses.contains(dayKey) { lock.unlock(); return nil }
+        lock.unlock()
+
+        let result = computeFestival(on: date)
+
+        lock.lock()
+        if let result {
+            cache[dayKey] = result
+        } else {
+            misses.insert(dayKey)
+        }
+        lock.unlock()
+        return result
+    }
+
+    private static func computeFestival(on date: Date) -> Festival? {
         // 除夕：次日是农历正月初一
         let tomorrow = CalendarMath.addDays(1, to: date)
         if let next = lunarMonthDay(tomorrow),
