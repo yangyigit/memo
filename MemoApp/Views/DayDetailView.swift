@@ -148,18 +148,8 @@ struct DayDetailView: View {
                     .foregroundStyle(Theme.inkSecondary.opacity(0.8))
             }
 
-            PlainTextEditor(text: $summaryDraft, identity: key)
+            PlainTextEditor(text: $summaryDraft, identity: key, placeholder: "今天过得怎么样？")
                 .frame(height: 200)
-                .overlay(alignment: .topLeading) {
-                    if summaryDraft.isEmpty {
-                        Text("今天过得怎么样？")
-                            .font(Theme.sans(14))
-                            .foregroundStyle(Theme.inkSecondary.opacity(0.55))
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
-                            .allowsHitTesting(false)
-                    }
-                }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)

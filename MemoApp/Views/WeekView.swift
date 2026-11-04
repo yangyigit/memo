@@ -244,18 +244,10 @@ struct WeekView: View {
                         .foregroundStyle(Theme.inkSecondary.opacity(0.8))
                 }
 
-                PlainTextEditor(text: $summaryDraft, identity: snap.weekKey)
+                PlainTextEditor(text: $summaryDraft,
+                                identity: snap.weekKey,
+                                placeholder: "这一周的关键词、做完的事、没做好的地方……")
                     .frame(height: 170)
-                    .overlay(alignment: .topLeading) {
-                        if summaryDraft.isEmpty {
-                            Text("这一周的关键词、做完的事、没做好的地方……")
-                                .font(Theme.sans(14))
-                                .foregroundStyle(Theme.inkSecondary.opacity(0.55))
-                                .padding(.top, 8)
-                                .padding(.leading, 5)
-                                .allowsHitTesting(false)
-                        }
-                    }
             }
         }
     }
