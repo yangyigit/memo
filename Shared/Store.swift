@@ -49,12 +49,20 @@ public final class Store {
         CalendarMath.monthStats(for: month, data: data, today: today)
     }
 
+    /// 本周实际上班天数（已计入单日例外）
     public func workdays(forWeekContaining date: Date) -> Int {
+        CalendarMath.effectiveWorkdays(inWeekContaining: date, data: data).count
+    }
+
+    /// 本周「基准」上班天数（不含单日例外），用于设置页预览
+    public func baseWorkdays(forWeekContaining date: Date) -> Int {
         let key = CalendarMath.weekKey(date)
         return CalendarMath.workdays(forWeekContaining: date,
                                      settings: data.settings,
                                      override: data.weeks[key]?.workdaysOverride)
     }
+
+    public var dayOverrideCount: Int { data.dayOverrides.count }
 
     // MARK: - 写入
 
@@ -135,6 +143,22 @@ public final class Store {
 
     public func setWorkdaysOverride(weekKey: String, value: Int?) {
         updateWeek(weekKey) { $0.workdaysOverride = value }
+    }
+
+    /// 标记某天为例外（nil 表示恢复跟随规则）
+    public func setDayOverride(_ date: Date, value: DayOverride?) {
+        let key = CalendarMath.dateKey(date)
+        if let value {
+            data.dayOverrides[key] = value
+        } else {
+            data.dayOverrides.removeValue(forKey: key)
+        }
+        scheduleSave()
+    }
+
+    public func clearDayOverrides() {
+        data.dayOverrides.removeAll()
+        scheduleSave()
     }
 
     public func setWeekSummary(weekKey: String, text: String) {

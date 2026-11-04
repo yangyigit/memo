@@ -87,6 +87,31 @@ struct SettingsView: View {
                     }
                 }
 
+                Hairline()
+
+                row("单日例外") {
+                    HStack(spacing: 8) {
+                        Text(store.dayOverrideCount == 0 ? "没有" : "\(store.dayOverrideCount) 天")
+                            .font(Theme.sans(12))
+                            .foregroundStyle(Theme.inkSecondary)
+                        if store.dayOverrideCount > 0 {
+                            Button("清除全部") { store.clearDayOverrides() }
+                                .buttonStyle(.plain)
+                                .font(Theme.sans(11, weight: .medium))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(Theme.accent.opacity(0.10)))
+                        }
+                    }
+                }
+
+                Text("在任意一天的页面里点「设例外」，可以把那天标成上班或休息（调休补班、法定假日、请假）。")
+                    .font(Theme.sans(11))
+                    .foregroundStyle(Theme.inkSecondary)
+
+                Hairline()
+
                 Text(previewText)
                     .font(Theme.sans(11))
                     .foregroundStyle(Theme.inkSecondary)
@@ -104,7 +129,7 @@ struct SettingsView: View {
         let nextWeek = store.workdays(forWeekContaining: CalendarMath.addWeeks(1, to: today))
         let thisMonday = CalendarMath.startOfWeek(today)
         let nextMonday = CalendarMath.addWeeks(1, to: thisMonday)
-        return "本周（\(CalendarMath.weekRangeTitle(monday: thisMonday))）上班 \(thisWeek) 天；下周（\(CalendarMath.weekRangeTitle(monday: nextMonday))）上班 \(nextWeek) 天。周日永远休息。"
+        return "本周（\(CalendarMath.weekRangeTitle(monday: thisMonday))）上班 \(thisWeek) 天；下周（\(CalendarMath.weekRangeTitle(monday: nextMonday))）上班 \(nextWeek) 天。基准不含周日，需要周日补班时用单日例外。"
     }
 
     // MARK: - 数据

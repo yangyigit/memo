@@ -18,9 +18,14 @@ struct WeekView: View {
         )
     }
 
+    /// 只针对「基准天数」，不要用 snap.workdays（那是含单日例外的实际天数）
+    private func baseWorkdays(_ snap: WeekSnapshot) -> Int {
+        store.baseWorkdays(forWeekContaining: snap.monday)
+    }
+
     private func overrideBinding(for snap: WeekSnapshot) -> Binding<Int> {
         Binding(
-            get: { store.weekEntry(snap.weekKey)?.workdaysOverride ?? snap.workdays },
+            get: { store.weekEntry(snap.weekKey)?.workdaysOverride ?? baseWorkdays(snap) },
             set: { store.setWorkdaysOverride(weekKey: snap.weekKey, value: $0) }
         )
     }
@@ -73,7 +78,7 @@ struct WeekView: View {
                     Text("\(snap.workdays) 天")
                         .font(Theme.serif(18, weight: .semibold))
                         .foregroundStyle(Theme.accent)
-                    Text(snap.isOverridden ? "已手动设置" : "跟随大小周规则")
+                    Text(sourceText(snap))
                         .font(Theme.sans(10))
                         .foregroundStyle(Theme.inkSecondary)
                 }
@@ -82,7 +87,7 @@ struct WeekView: View {
                     chip("自动", selected: !snap.isOverridden) {
                         store.setWorkdaysOverride(weekKey: snap.weekKey, value: nil)
                     }
-                    ForEach([4, 5, 6], id: \.self) { n in
+                    ForEach([4, 5, 6, 0], id: \.self) { n in
                         chip("\(n) 天", selected: snap.entry?.workdaysOverride == n) {
                             store.setWorkdaysOverride(weekKey: snap.weekKey, value: n)
                         }
@@ -90,8 +95,8 @@ struct WeekView: View {
 
                     Spacer()
 
-                    Stepper(value: overrideBinding(for: snap), in: 1...6) {
-                        Text("自定义 \(snap.entry?.workdaysOverride ?? snap.workdays)")
+                    Stepper(value: overrideBinding(for: snap), in: 0...6) {
+                        Text("自定义 \(snap.entry?.workdaysOverride ?? baseWorkdays(snap))")
                             .font(Theme.sans(11))
                             .foregroundStyle(Theme.inkSecondary)
                     }
@@ -140,6 +145,17 @@ struct WeekView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            if let override = day.override {
+                Text(override.badge)
+                    .font(Theme.sans(9, weight: .medium))
+                    .foregroundStyle(override == .work ? Theme.accent : Theme.inkSecondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(
+                        Capsule().fill((override == .work ? Theme.accent : Theme.ink).opacity(0.10))
+                    )
+            }
+
             if day.taskTotal > 0 {
                 HStack(spacing: 6) {
                     ThinProgressBar(
@@ -151,7 +167,7 @@ struct WeekView: View {
                         .font(Theme.sans(10))
                         .foregroundStyle(Theme.inkSecondary)
                 }
-            } else if !day.isWorkday {
+            } else if !day.isWorkday && !day.isManualOverride {
                 Text("休息")
                     .font(Theme.sans(10))
                     .foregroundStyle(Theme.inkSecondary.opacity(0.6))
@@ -204,6 +220,10 @@ struct WeekView: View {
             Text("上班 \(snap.workdays) 天")
             dot
             Text("休息 \(snap.restDays) 天")
+            if snap.manualDays > 0 {
+                dot
+                Text("例外 \(snap.manualDays) 天")
+            }
             Spacer()
         }
         .font(Theme.sans(11))
@@ -213,6 +233,19 @@ struct WeekView: View {
 
     private var dot: some View {
         Text("·").foregroundStyle(Theme.inkSecondary.opacity(0.6))
+    }
+
+    private func sourceText(_ snap: WeekSnapshot) -> String {
+        var parts: [String] = []
+        if snap.isOverridden {
+            parts.append("已手动设置")
+        } else {
+            parts.append("跟随大小周规则")
+        }
+        if snap.manualDays > 0 {
+            parts.append("含 \(snap.manualDays) 天例外")
+        }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - 控件

@@ -48,7 +48,7 @@ struct DayDetailView: View {
                     .foregroundStyle(Theme.ink)
 
                 HStack(spacing: 8) {
-                    Text(snapshot.isWorkday ? "上班日" : "休息日")
+                    Text(workdayBadgeTitle)
                         .font(Theme.sans(10, weight: .medium))
                         .foregroundStyle(snapshot.isWorkday ? Theme.accent : Theme.inkSecondary)
                         .padding(.horizontal, 8)
@@ -56,6 +56,8 @@ struct DayDetailView: View {
                         .background(
                             Capsule().fill(snapshot.isWorkday ? Theme.accent.opacity(0.12) : Theme.ink.opacity(0.06))
                         )
+
+                    overrideMenu
 
                     Text(CalendarMath.weekKey(current) + " · 本周上班 \(store.workdays(forWeekContaining: current)) 天")
                         .font(Theme.sans(10))
@@ -213,6 +215,38 @@ struct DayDetailView: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .contentShape(Rectangle())
+    }
+
+    // MARK: - 例外
+
+    private var workdayBadgeTitle: String {
+        guard let override = snapshot.override else {
+            return snapshot.isWorkday ? "上班日" : "休息日"
+        }
+        return override == .work ? "手动·上班" : "手动·休息"
+    }
+
+    private var overrideMenu: some View {
+        Menu {
+            Button("跟随大小周规则") { store.setDayOverride(current, value: nil) }
+            Divider()
+            Button("标记为上班") { store.setDayOverride(current, value: .work) }
+            Button("标记为休息") { store.setDayOverride(current, value: .rest) }
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "calendar.badge.clock")
+                    .font(.system(size: 9, weight: .medium))
+                Text(snapshot.isManualOverride ? "已设例外" : "设例外")
+                    .font(Theme.sans(10, weight: .medium))
+            }
+            .foregroundStyle(snapshot.isManualOverride ? Theme.accent : Theme.inkSecondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Theme.ink.opacity(0.05)))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     // MARK: - 行为

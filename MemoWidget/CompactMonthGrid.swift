@@ -75,12 +75,10 @@ struct CompactMonthGrid: View {
     }
 
     private var workdays: Set<String> {
-        let snap = CalendarMath.weekSnapshot(containing: reference, data: data, today: reference)
-        let count = snap.workdays
         var set = Set<String>()
         for week in rows {
             guard let first = week.first else { continue }
-            set.formUnion(CalendarMath.workdayDates(inWeekContaining: first.date, workdays: count))
+            set.formUnion(CalendarMath.effectiveWorkdays(inWeekContaining: first.date, data: data))
         }
         return set
     }

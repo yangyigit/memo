@@ -18,14 +18,13 @@ COMMON=(-project Memo.xcodeproj -scheme Memo -configuration "$CONFIG" -derivedDa
 
 if [ -n "$IDENTITY_HASH" ]; then
   echo "🔏 签名模式：Apple Development（${IDENTITY_HASH:0:10}…）"
-  SIGN=(CODE_SIGN_STYLE=Manual
-        CODE_SIGN_IDENTITY="$IDENTITY_HASH"
-        CODE_SIGNING_REQUIRED=YES)
 else
   echo "⚠️  ad-hoc 模式：未找到 Apple Development 证书 —— App 能跑，但系统不会加载小组件"
   echo "    需要小组件时：Xcode → Settings → Accounts 登录 Apple ID，然后重新 make run"
-  SIGN=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=YES)
 fi
+
+# 签名参数统一由 scripts/signargs.sh 产出，保证 build 与 test 一致
+mapfile -t SIGN < <(CODE_SIGN_HASH="${IDENTITY_HASH}" ./scripts/signargs.sh)
 
 set -o pipefail
 xcodebuild "${COMMON[@]}" "${SIGN[@]}" build 2>&1 | tee "$LOG" | grep -E "error:|^BUILD|^\*\*" || true

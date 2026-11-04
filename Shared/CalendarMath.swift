@@ -130,9 +130,9 @@ public enum CalendarMath {
 
     /// 某一周上班天数：手动覆盖 > 交替规则 > 小周天数
     public static func workdays(forWeekContaining date: Date, settings: Settings, override: Int?) -> Int {
-        let maxWorkdays = 6 // 周日永远休息
-        if let override, override > 0 {
-            return min(override, maxWorkdays)
+        let maxWorkdays = 6 // 周日不进入「基准」工作日；要周日上班请用单日例外
+        if let override {
+            return min(max(override, 0), maxWorkdays)
         }
         let small = min(max(settings.smallWeekDays, 1), maxWorkdays)
         guard settings.alternating else { return small }
@@ -154,6 +154,34 @@ public enum CalendarMath {
             }
         }
         return result
+    }
+
+    /// 基准工作日 + 单日例外后的实际工作日集合
+    public static func workdayDateSet(inWeekContaining date: Date,
+                                      settings: Settings,
+                                      weekOverride: Int?,
+                                      dayOverrides: [String: DayOverride]) -> Set<String> {
+        let base = workdays(forWeekContaining: date, settings: settings, override: weekOverride)
+        var set = workdayDates(inWeekContaining: date, workdays: base)
+        let monday = startOfWeek(date)
+        for offset in 0..<7 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: monday) else { continue }
+            let key = dateKey(day)
+            switch dayOverrides[key] {
+            case .work: set.insert(key)
+            case .rest: set.remove(key)
+            case nil: break
+            }
+        }
+        return set
+    }
+
+    /// 直接从整库算某周的实际工作日集合
+    public static func effectiveWorkdays(inWeekContaining date: Date, data: StoreData) -> Set<String> {
+        workdayDateSet(inWeekContaining: date,
+                       settings: data.settings,
+                       weekOverride: data.weeks[weekKey(date)]?.workdaysOverride,
+                       dayOverrides: data.dayOverrides)
     }
 
     public static func isWorkday(_ date: Date, settings: Settings, override: Int?) -> Bool {
@@ -223,16 +251,14 @@ public enum CalendarMath {
 
     public static func daySnapshot(for date: Date, data: StoreData, today: Date = Date()) -> DaySnapshot {
         let key = dateKey(date)
-        let weekKey = weekKey(date)
-        let override = data.weeks[weekKey]?.workdaysOverride
-        let workdays = workdays(forWeekContaining: date, settings: data.settings, override: override)
-        let workdaySet = workdayDates(inWeekContaining: date, workdays: workdays)
+        let workdaySet = effectiveWorkdays(inWeekContaining: date, data: data)
         return DaySnapshot(
             date: calendar.startOfDay(for: date),
             key: key,
             entry: data.days[key],
             isWorkday: workdaySet.contains(key),
-            isToday: key == dateKey(today)
+            isToday: key == dateKey(today),
+            override: data.dayOverrides[key]
         )
     }
 
@@ -240,20 +266,20 @@ public enum CalendarMath {
         let monday = startOfWeek(date)
         let key = weekKey(monday)
         let entry = data.weeks[key]
-        let workdays = workdays(forWeekContaining: monday, settings: data.settings, override: entry?.workdaysOverride)
+        let workdaySet = effectiveWorkdays(inWeekContaining: monday, data: data)
         let days = (0..<7).map { offset -> DaySnapshot in
             let day = addDays(offset, to: monday)
             let dayKey = dateKey(day)
-            let workdaySet = workdayDates(inWeekContaining: monday, workdays: workdays)
             return DaySnapshot(
                 date: calendar.startOfDay(for: day),
                 key: dayKey,
                 entry: data.days[dayKey],
                 isWorkday: workdaySet.contains(dayKey),
-                isToday: dayKey == dateKey(today)
+                isToday: dayKey == dateKey(today),
+                override: data.dayOverrides[dayKey]
             )
         }
-        return WeekSnapshot(monday: monday, weekKey: key, days: days, workdays: workdays, entry: entry)
+        return WeekSnapshot(monday: monday, weekKey: key, days: days, workdays: workdaySet.count, entry: entry)
     }
 
     public static func monthStats(for month: Date, data: StoreData, today: Date = Date()) -> MonthStats {
@@ -273,9 +299,7 @@ public enum CalendarMath {
             let key = weekKey(day.date)
             if !countedWeeks.contains(key) {
                 countedWeeks.insert(key)
-                let override = data.weeks[key]?.workdaysOverride
-                let count = Self.workdays(forWeekContaining: day.date, settings: data.settings, override: override)
-                let workdaySet = workdayDates(inWeekContaining: day.date, workdays: count)
+                let workdaySet = Self.effectiveWorkdays(inWeekContaining: day.date, data: data)
                 workdays += grid.filter { workdaySet.contains($0.key) }.count
             }
         }

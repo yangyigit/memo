@@ -189,15 +189,27 @@ struct DayCell: View {
                 Spacer(minLength: 0)
             }
 
-            if snapshot.taskTotal > 0 {
-                VStack(alignment: .leading, spacing: 3) {
-                    ThinProgressBar(
-                        value: Double(snapshot.taskDone) / Double(snapshot.taskTotal),
-                        height: 2
-                    )
-                    Text("\(snapshot.taskDone)/\(snapshot.taskTotal)")
-                        .font(Theme.sans(9))
-                        .foregroundStyle(Theme.inkSecondary)
+            HStack(alignment: .bottom, spacing: 4) {
+                if snapshot.taskTotal > 0 {
+                    VStack(alignment: .leading, spacing: 3) {
+                        ThinProgressBar(
+                            value: Double(snapshot.taskDone) / Double(snapshot.taskTotal),
+                            height: 2
+                        )
+                        Text("\(snapshot.taskDone)/\(snapshot.taskTotal)")
+                            .font(Theme.sans(9))
+                            .foregroundStyle(Theme.inkSecondary)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if let override = snapshot.override {
+                    Text(override.badge)
+                        .font(Theme.sans(9, weight: .medium))
+                        .foregroundStyle(override == .work
+                                         ? Theme.accent.opacity(isInCurrentMonth ? 1 : 0.5)
+                                         : Theme.inkSecondary.opacity(isInCurrentMonth ? 0.9 : 0.5))
                 }
             }
         }

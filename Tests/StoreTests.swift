@@ -165,6 +165,47 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(StoreFile.load(from: url).days["2026-11-04"]?.tasks.count, 1)
     }
 
+
+    func testSetAndClearDayOverride() {
+        let store = Store(url: url)
+        let day = CalendarMath.date(fromKey: "2026-11-07")!
+        XCTAssertEqual(store.dayOverrideCount, 0)
+
+        store.setDayOverride(day, value: .rest)
+        XCTAssertEqual(store.dayOverrideCount, 1)
+        XCTAssertEqual(store.daySnapshot(for: day, today: day).override, .rest)
+        XCTAssertFalse(store.daySnapshot(for: day, today: day).isWorkday)
+
+        store.saveNow()
+        let reloaded = Store(url: url)
+        XCTAssertEqual(reloaded.daySnapshot(for: day, today: day).override, .rest)
+
+        store.setDayOverride(day, value: nil)
+        XCTAssertEqual(store.dayOverrideCount, 0)
+        XCTAssertTrue(store.daySnapshot(for: day, today: day).isWorkday)
+    }
+
+    func testClearAllDayOverrides() {
+        let store = Store(url: url)
+        store.setDayOverride(CalendarMath.date(fromKey: "2026-11-07")!, value: .rest)
+        store.setDayOverride(CalendarMath.date(fromKey: "2026-11-08")!, value: .work)
+        XCTAssertEqual(store.dayOverrideCount, 2)
+        store.clearDayOverrides()
+        XCTAssertEqual(store.dayOverrideCount, 0)
+        store.saveNow()
+        XCTAssertTrue(StoreFile.load(from: url).dayOverrides.isEmpty)
+    }
+
+    func testWorkdaysHelperCountsOverrides() {
+        let store = Store(url: url)
+        store.updateSettings { $0.bigWeekAnchor = "2026-W45" }
+        let saturday = CalendarMath.date(fromKey: "2026-11-07")!
+        XCTAssertEqual(store.workdays(forWeekContaining: saturday), 6)
+        store.setDayOverride(saturday, value: .rest)
+        XCTAssertEqual(store.workdays(forWeekContaining: saturday), 5)
+        XCTAssertEqual(store.baseWorkdays(forWeekContaining: saturday), 6)
+    }
+
     func testWorkdaysHelperMatchesRules() {
         let store = Store(url: url)
         store.updateSettings {

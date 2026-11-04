@@ -151,6 +151,81 @@ final class CalendarMathTests: XCTestCase {
         XCTAssertFalse(snap.isOverridden)
     }
 
+
+    // MARK: - 单日例外
+
+    func testRestOverrideRemovesWorkday() {
+        var data = StoreData(settings: settings(anchor: "2026-W45"))
+        data.dayOverrides["2026-11-07"] = .rest // 大周的周六
+        let snap = CalendarMath.weekSnapshot(containing: date(2026, 11, 4), data: data, today: date(2026, 11, 4))
+        XCTAssertEqual(snap.workdays, 5)
+        XCTAssertEqual(snap.restDays, 2)
+        XCTAssertEqual(snap.manualDays, 1)
+        XCTAssertFalse(snap.days.first { $0.key == "2026-11-07" }!.isWorkday)
+        XCTAssertEqual(snap.days.first { $0.key == "2026-11-07" }!.override, .rest)
+    }
+
+    func testWorkOverrideAllowsSunday() {
+        var data = StoreData(settings: settings(anchor: "2026-W45"))
+        // 2026-W46 是小周（5 天），把周日补班
+        data.dayOverrides["2026-11-15"] = .work
+        let snap = CalendarMath.weekSnapshot(containing: date(2026, 11, 11), data: data, today: date(2026, 11, 11))
+        XCTAssertEqual(snap.weekKey, "2026-W46")
+        XCTAssertEqual(snap.workdays, 6)
+        XCTAssertEqual(snap.restDays, 1)
+        XCTAssertTrue(snap.days.first { $0.key == "2026-11-15" }!.isWorkday)
+    }
+
+    func testOverrideOnlyAffectsItsOwnDay() {
+        var data = StoreData(settings: settings(anchor: "2026-W45"))
+        data.dayOverrides["2026-11-02"] = .rest // 周一放假
+        let snap = CalendarMath.weekSnapshot(containing: date(2026, 11, 4), data: data, today: date(2026, 11, 4))
+        XCTAssertEqual(snap.workdays, 5)
+        XCTAssertFalse(snap.days.first { $0.key == "2026-11-02" }!.isWorkday)
+        XCTAssertTrue(snap.days.first { $0.key == "2026-11-03" }!.isWorkday)
+        // 不影响相邻周
+        let next = CalendarMath.weekSnapshot(containing: date(2026, 11, 11), data: data, today: date(2026, 11, 11))
+        XCTAssertEqual(next.workdays, 5)
+        XCTAssertEqual(next.manualDays, 0)
+    }
+
+    func testWeekOverrideZeroMeansWholeWeekOff() {
+        var data = StoreData(settings: settings(anchor: "2026-W45"))
+        data.weeks["2026-W45"] = WeekEntry(workdaysOverride: 0)
+        var snap = CalendarMath.weekSnapshot(containing: date(2026, 11, 4), data: data, today: date(2026, 11, 4))
+        XCTAssertEqual(snap.workdays, 0)
+        XCTAssertTrue(snap.days.allSatisfy { !$0.isWorkday })
+
+        // 整周放假里单独让周三上班
+        data.dayOverrides["2026-11-04"] = .work
+        snap = CalendarMath.weekSnapshot(containing: date(2026, 11, 4), data: data, today: date(2026, 11, 4))
+        XCTAssertEqual(snap.workdays, 1)
+        XCTAssertTrue(snap.days.first { $0.key == "2026-11-04" }!.isWorkday)
+    }
+
+    func testMonthStatsRespectsOverrides() {
+        let plain = CalendarMath.monthStats(for: date(2026, 11, 4),
+                                            data: StoreData(settings: settings(anchor: "2026-W45")),
+                                            today: date(2026, 11, 4))
+        var data = StoreData(settings: settings(anchor: "2026-W45"))
+        data.dayOverrides["2026-11-04"] = .rest
+        let withRest = CalendarMath.monthStats(for: date(2026, 11, 4), data: data, today: date(2026, 11, 4))
+        XCTAssertEqual(plain.workdays - withRest.workdays, 1)
+
+        var data2 = StoreData(settings: settings(anchor: "2026-W45"))
+        data2.dayOverrides["2026-11-08"] = .work // 周日补班
+        let withSunday = CalendarMath.monthStats(for: date(2026, 11, 4), data: data2, today: date(2026, 11, 4))
+        XCTAssertEqual(withSunday.workdays - plain.workdays, 1)
+    }
+
+    func testLegacyFileWithoutOverridesStillDecodes() throws {
+        let json = """
+        {"version":1,"settings":{"alternating":true,"bigWeekAnchor":"2026-W45","bigWeekDays":6,"smallWeekDays":5},"days":{},"weeks":{}}
+        """
+        let data = try JSONDecoder().decode(StoreData.self, from: Data(json.utf8))
+        XCTAssertTrue(data.dayOverrides.isEmpty)
+    }
+
     func testMonthStats() {
         var data = StoreData(settings: settings(anchor: "2026-W45"))
         data.days["2026-11-04"] = DayEntry(summary: "x", tasks: [PlanTask(text: "a", done: true)])

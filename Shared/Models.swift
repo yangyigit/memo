@@ -16,6 +16,19 @@ public struct PlanTask: Codable, Identifiable, Equatable, Hashable {
     }
 }
 
+// MARK: - 单日例外（节假日 / 调休补班 / 请假）
+
+public enum DayOverride: String, Codable, Equatable, Hashable {
+    /// 强制上班（可让周日变成上班日，用于调休补班）
+    case work
+    /// 强制休息（法定假日、请假）
+    case rest
+
+    public var title: String { self == .work ? "上班" : "休息" }
+    /// 月历/周视图里的小标记
+    public var badge: String { self == .work ? "班" : "休" }
+}
+
 // MARK: - 一天
 
 public struct DayEntry: Codable, Equatable {
@@ -96,15 +109,19 @@ public struct StoreData: Codable, Equatable {
     public var settings: Settings
     public var days: [String: DayEntry]
     public var weeks: [String: WeekEntry]
+    /// 单日例外：key 为 "2026-11-04"
+    public var dayOverrides: [String: DayOverride]
 
     public init(version: Int = StoreData.currentVersion,
                 settings: Settings = Settings(),
                 days: [String: DayEntry] = [:],
-                weeks: [String: WeekEntry] = [:]) {
+                weeks: [String: WeekEntry] = [:],
+                dayOverrides: [String: DayOverride] = [:]) {
         self.version = version
         self.settings = settings
         self.days = days
         self.weeks = weeks
+        self.dayOverrides = dayOverrides
     }
 
     // 容错解码：缺字段时用默认值，避免旧文件/半截字段导致整库读不出来
@@ -114,6 +131,7 @@ public struct StoreData: Codable, Equatable {
         settings = (try? c.decode(Settings.self, forKey: .settings)) ?? Settings()
         days = (try? c.decode([String: DayEntry].self, forKey: .days)) ?? [:]
         weeks = (try? c.decode([String: WeekEntry].self, forKey: .weeks)) ?? [:]
+        dayOverrides = (try? c.decode([String: DayOverride].self, forKey: .dayOverrides)) ?? [:]
     }
 }
 
@@ -126,18 +144,23 @@ public struct DaySnapshot: Identifiable, Equatable {
     public let entry: DayEntry?
     public let isWorkday: Bool
     public let isToday: Bool
+    /// 手动的单日例外；nil 表示跟随大小周规则
+    public let override: DayOverride?
 
     public var id: String { key }
     public var taskTotal: Int { entry?.tasks.count ?? 0 }
     public var taskDone: Int { entry?.doneCount ?? 0 }
     public var hasSummary: Bool { !(entry?.summaryPreview.isEmpty ?? true) }
+    public var isManualOverride: Bool { override != nil }
 
-    public init(date: Date, key: String, entry: DayEntry?, isWorkday: Bool, isToday: Bool) {
+    public init(date: Date, key: String, entry: DayEntry?, isWorkday: Bool, isToday: Bool,
+                override: DayOverride? = nil) {
         self.date = date
         self.key = key
         self.entry = entry
         self.isWorkday = isWorkday
         self.isToday = isToday
+        self.override = override
     }
 }
 
@@ -151,6 +174,7 @@ public struct WeekSnapshot: Equatable {
 
     public var restDays: Int { 7 - workdays }
     public var hasRecord: Int { days.filter { $0.entry != nil }.count }
+    public var manualDays: Int { days.filter(\.isManualOverride).count }
     public var taskTotal: Int { days.reduce(0) { $0 + $1.taskTotal } }
     public var taskDone: Int { days.reduce(0) { $0 + $1.taskDone } }
     public var isOverridden: Bool { entry?.workdaysOverride != nil }

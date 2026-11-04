@@ -80,14 +80,14 @@ doctor:
 open-data:
 	@open "$(HOME)/Library/Application Support/Memo"
 
-test: gen
+# 测试用独立 DerivedData，避免和 App 构建产物互相影响签名身份
+test: gen $(WIDGET_ENT)
 	@set -o pipefail; xcodebuild \
 		-project Memo.xcodeproj \
 		-scheme Memo \
 		-configuration $(CONFIG) \
-		-derivedDataPath $(DERIVED) \
-		CODE_SIGN_IDENTITY="-" \
-		CODE_SIGNING_REQUIRED=YES \
+		-derivedDataPath $(BUILD_DIR)/DerivedDataTests \
+		$(shell ./scripts/signargs.sh) \
 		test 2>&1 | tee $(BUILD_DIR)/test.log | grep -E "error:|Test Suite|Executed|^\*\*" || true
 
 clean:
