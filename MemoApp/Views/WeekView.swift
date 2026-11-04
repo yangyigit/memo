@@ -139,6 +139,15 @@ struct WeekView: View {
             }
             .frame(width: 30)
 
+            if let festival = Festivals.festival(on: day.date) {
+                Text(festival.name)
+                    .font(Theme.sans(9, weight: .medium))
+                    .foregroundStyle(festival.isMajor ? Theme.accent : Theme.inkSecondary)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill((festival.isMajor ? Theme.accent : Theme.ink).opacity(0.08)))
+            }
+
             Text(day.hasSummary ? (day.entry?.summaryPreview ?? "") : "—")
                 .font(Theme.sans(12))
                 .foregroundStyle(day.hasSummary ? Theme.ink : Theme.inkSecondary.opacity(0.5))

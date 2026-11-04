@@ -16,6 +16,10 @@ struct MonthView: View {
         store.monthStats(for: monthAnchor, today: today)
     }
 
+    private var festivalMap: [String: Festival] {
+        Festivals.festivals(inMonth: monthAnchor)
+    }
+
     private var weeks: [[GridDay]] {
         stride(from: 0, to: grid.count, by: 7).map { Array(grid[$0..<min($0 + 7, grid.count)]) }
     }
@@ -32,7 +36,7 @@ struct MonthView: View {
                         ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
                             HStack(spacing: 2) {
                                 ForEach(week) { day in
-                                    dayCell(day)
+                                    dayCell(day, festivals: festivalMap)
                                 }
                             }
                         }
@@ -54,6 +58,15 @@ struct MonthView: View {
             Text(CalendarMath.monthTitle(monthAnchor))
                 .font(Theme.serif(30, weight: .semibold))
                 .foregroundStyle(Theme.ink)
+
+            if let festival = Festivals.festival(on: today) {
+                Text("今天 · \(festival.name)")
+                    .font(Theme.sans(11, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Theme.accent.opacity(0.10)))
+            }
 
             Spacer()
 
@@ -99,12 +112,14 @@ struct MonthView: View {
 
     // MARK: - 格子
 
-    private func dayCell(_ day: GridDay) -> some View {
+    private func dayCell(_ day: GridDay, festivals: [String: Festival]) -> some View {
         let snapshot = store.daySnapshot(for: day.date, today: today)
         return Button {
             selectedDay = IdentifiableDate(date: day.date)
         } label: {
-            DayCell(snapshot: snapshot, isInCurrentMonth: day.isInCurrentMonth)
+            DayCell(snapshot: snapshot,
+                    isInCurrentMonth: day.isInCurrentMonth,
+                    festival: festivals[day.key])
         }
         .buttonStyle(.plain)
     }
@@ -140,6 +155,7 @@ struct MonthView: View {
 struct DayCell: View {
     let snapshot: DaySnapshot
     let isInCurrentMonth: Bool
+    var festival: Festival? = nil
 
     @State private var hovering = false
 
@@ -176,13 +192,21 @@ struct DayCell: View {
                 }
             }
 
+            if let festival {
+                Text(festival.name)
+                    .font(Theme.sans(9, weight: festival.isMajor ? .medium : .regular))
+                    .foregroundStyle(festival.isMajor ? Theme.accent.opacity(0.9) : Theme.inkSecondary)
+                    .lineLimit(1)
+                    .opacity(isInCurrentMonth ? 1 : 0.45)
+            }
+
             Spacer(minLength: 0)
 
             if let preview = snapshot.entry?.summaryPreview, !preview.isEmpty {
                 Text(preview)
                     .font(Theme.sans(9.5))
                     .foregroundStyle(Theme.inkSecondary)
-                    .lineLimit(2)
+                    .lineLimit(festival == nil ? 2 : 1)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .opacity(isInCurrentMonth ? 1 : 0.45)

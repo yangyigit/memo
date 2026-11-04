@@ -45,6 +45,11 @@ struct TodayWidgetView: View {
                     Text(CalendarMath.weekdaySymbol(for: entry.date))
                         .font(Theme.sans(9))
                         .foregroundStyle(Theme.inkSecondary)
+                    if let festival = Festivals.festival(on: entry.date) {
+                        Text(festival.name)
+                            .font(Theme.sans(9, weight: .medium))
+                            .foregroundStyle(Theme.accent)
+                    }
                     Spacer(minLength: 0)
                     if !tasks.isEmpty {
                         Text("\(doneCount)/\(tasks.count)")

@@ -59,6 +59,15 @@ struct DayDetailView: View {
 
                     overrideMenu
 
+                    if let festival = Festivals.festival(on: current) {
+                        Text(festival.name)
+                            .font(Theme.sans(10, weight: .medium))
+                            .foregroundStyle(Theme.accent)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(Theme.accent.opacity(0.10)))
+                    }
+
                     Text(CalendarMath.weekKey(current) + " · 本周上班 \(store.workdays(forWeekContaining: current)) 天")
                         .font(Theme.sans(10))
                         .foregroundStyle(Theme.inkSecondary)

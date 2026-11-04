@@ -25,6 +25,11 @@ struct MonthWidgetView: View {
                 Text(CalendarMath.shortDayTitle(entry.date))
                     .font(Theme.sans(9, weight: .medium))
                     .foregroundStyle(Theme.accent)
+                if let festival = Festivals.festival(on: entry.date) {
+                    Text("· \(festival.name)")
+                        .font(Theme.sans(9, weight: .medium))
+                        .foregroundStyle(Theme.accent)
+                }
                 Text(entry.problem ?? (todayTotal > 0 ? "计划 \(todayDone)/\(todayTotal)" : "今天还没有计划"))
                     .font(Theme.sans(9))
                     .foregroundStyle(entry.problem == nil ? Theme.inkSecondary : Theme.accent)
