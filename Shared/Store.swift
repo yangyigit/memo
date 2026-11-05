@@ -107,6 +107,19 @@ public final class Store {
         }
     }
 
+    /// 改计划文字；改成空白等于删除
+    public func updateTaskText(_ date: Date, taskID: UUID, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        updateDay(CalendarMath.dateKey(date)) { entry in
+            guard let index = entry.tasks.firstIndex(where: { $0.id == taskID }) else { return }
+            if trimmed.isEmpty {
+                entry.tasks.remove(at: index)
+            } else {
+                entry.tasks[index].text = trimmed
+            }
+        }
+    }
+
     public func deleteTask(_ date: Date, taskID: UUID) {
         updateDay(CalendarMath.dateKey(date)) { entry in
             entry.tasks.removeAll { $0.id == taskID }

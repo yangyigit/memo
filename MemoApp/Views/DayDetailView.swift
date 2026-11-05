@@ -9,6 +9,10 @@ struct DayDetailView: View {
     @State private var today = Date()
     @State private var summaryDraft = ""
     @State private var loadedKey = ""
+    @State private var editingTaskID: UUID?
+    @State private var hoveredTaskID: UUID?
+    @State private var editingTaskText = ""
+    @FocusState private var taskFieldFocus: UUID?
     @State private var commitTask: Task<Void, Never>?
     @FocusState private var addFieldFocused: Bool
 
@@ -66,7 +70,10 @@ struct DayDetailView: View {
             today = Date()
             loadDraft()
         }
-        .onChange(of: key) { _, _ in loadDraft() }
+        .onChange(of: key) { _, _ in
+            cancelTaskEdit()
+            loadDraft()
+        }
         .onChange(of: summaryDraft) { _, _ in scheduleCommit() }
         .onDisappear {
             flush()
@@ -230,10 +237,37 @@ struct DayDetailView: View {
             }
             .buttonStyle(.plain)
 
-            Text(task.text)
-                .font(Theme.sans(13))
-                .foregroundStyle(task.done ? Theme.inkSecondary : Theme.ink)
-                .strikethrough(task.done, color: Theme.inkSecondary.opacity(0.6))
+            if editingTaskID == task.id {
+                TextField("", text: $editingTaskText)
+                    .textFieldStyle(.plain)
+                    .font(Theme.sans(13))
+                    .foregroundStyle(Theme.ink)
+                    .focused($taskFieldFocus, equals: task.id)
+                    .onSubmit { commitTaskEdit() }
+                    .onExitCommand { cancelTaskEdit() }
+                    .onChange(of: taskFieldFocus) { _, newValue in
+                        if newValue != task.id, editingTaskID == task.id {
+                            commitTaskEdit()
+                        }
+                    }
+            } else {
+                Text(task.text)
+                    .font(Theme.sans(13))
+                    .foregroundStyle(task.done ? Theme.inkSecondary : Theme.ink)
+                    .strikethrough(task.done, color: Theme.inkSecondary.opacity(0.6))
+                    .padding(.vertical, 1)
+                    .padding(.horizontal, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .fill(hoveredTaskID == task.id ? Theme.ink.opacity(0.05) : .clear)
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { beginTaskEdit(task) }
+                    .onHover { inside in
+                        hoveredTaskID = inside ? task.id : (hoveredTaskID == task.id ? nil : hoveredTaskID)
+                    }
+                    .help("点一下改文字")
+            }
 
             Spacer(minLength: 0)
 
@@ -292,6 +326,32 @@ struct DayDetailView: View {
         addFieldFocused = true
     }
 
+    // MARK: - 计划行内编辑
+
+    private func beginTaskEdit(_ task: PlanTask) {
+        if editingTaskID == task.id { return }
+        // 直接点另一行时，先把上一行没提交的改动落下来
+        if editingTaskID != nil { commitTaskEdit() }
+        editingTaskID = task.id
+        editingTaskText = task.text
+        DispatchQueue.main.async { taskFieldFocus = task.id }
+    }
+
+    private func commitTaskEdit() {
+        guard let id = editingTaskID else { return }
+        let text = editingTaskText
+        editingTaskID = nil
+        editingTaskText = ""
+        taskFieldFocus = nil
+        store.updateTaskText(current, taskID: id, text: text)
+    }
+
+    private func cancelTaskEdit() {
+        editingTaskID = nil
+        editingTaskText = ""
+        taskFieldFocus = nil
+    }
+
     private func handleDrop(on target: PlanTask, providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         _ = provider.loadObject(ofClass: NSString.self) { object, _ in
@@ -305,6 +365,7 @@ struct DayDetailView: View {
     }
 
     private func shift(_ days: Int) {
+        cancelTaskEdit()
         flush()
         current = CalendarMath.calendar.startOfDay(for: CalendarMath.addDays(days, to: current))
     }

@@ -136,6 +136,24 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(store.dayEntry("2026-11-04"))
     }
 
+    func testUpdateTaskText() {
+        let store = Store(url: url)
+        let day = CalendarMath.date(fromKey: "2026-11-04")!
+        let id = store.addTask(to: day, text: "跑步")!
+        store.updateTaskText(day, taskID: id, text: "  跑步 5 公里  ")
+        XCTAssertEqual(store.tasks(for: day).first?.text, "跑步 5 公里")
+        XCTAssertEqual(store.tasks(for: day).count, 1)
+    }
+
+    func testUpdateTaskTextToBlankDeletesTask() {
+        let store = Store(url: url)
+        let day = CalendarMath.date(fromKey: "2026-11-04")!
+        let id = store.addTask(to: day, text: "跑步")!
+        store.updateTaskText(day, taskID: id, text: "   ")
+        XCTAssertTrue(store.tasks(for: day).isEmpty)
+        XCTAssertNil(store.dayEntry("2026-11-04"))
+    }
+
     func testBlankTaskIsIgnored() {
         let store = Store(url: url)
         let day = CalendarMath.date(fromKey: "2026-11-04")!
